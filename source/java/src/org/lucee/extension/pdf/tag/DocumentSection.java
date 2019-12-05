@@ -5,17 +5,17 @@
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either 
+ * License as published by the Free Software Foundation; either
  * version 2.1 of the License, or (at your option) any later version.
- * 
+ *
  * This library is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
- * 
- * You should have received a copy of the GNU Lesser General Public 
+ *
+ * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see <http://www.gnu.org/licenses/>.
- * 
+ *
  **/
 package org.lucee.extension.pdf.tag;
 
@@ -25,32 +25,47 @@ import org.lucee.extension.pdf.PDFDocument;
 import org.lucee.extension.pdf.PDFPageMark;
 
 import lucee.commons.io.res.Resource;
+import lucee.loader.engine.CFMLEngineFactory;
 import lucee.runtime.exp.PageException;
 
 public final class DocumentSection extends BodyTagImpl implements AbsDoc {
 
 	private PDFDocument _document;
+	private int index;
+	private boolean second;
 
 	public DocumentSection() {
 		this._document = null;
 	}
 
+	@Override
+	public void release() {
+		super.release();
+		index = 0;
+		_document = null;
+
+	}
+
+	@Override
 	public PDFDocument getPDFDocument() {
-		if (_document == null) {
-			_document = PDFDocument.newInstance(getDocument().getApplicationSettings().getType());
+		if (_document == null) { // in the second round we already have this
+
+			Document doc = getDocumentEL();
+			this.index = doc.getIndex();
+			_document = doc.getPDFDocument(index);
+			second = true;
+			if (_document == null) {
+				second = false;
+				_document = PDFDocument.newInstance(doc.getApplicationSettings().getType());
+			}
+
 		}
 		return _document;
 	}
 
-	@Override
-	public void release() {
-		super.release();
-		_document = null;
-	}
-
 	/**
 	 * set the value proxyserver Host name or IP address of a proxy server.
-	 * 
+	 *
 	 * @param proxyserver value to set
 	 **/
 	public void setProxyserver(String proxyserver) {
@@ -61,7 +76,7 @@ public final class DocumentSection extends BodyTagImpl implements AbsDoc {
 	 * set the value proxyport The port number on the proxy server from which the object is requested.
 	 * Default is 80. When used with resolveURL, the URLs of retrieved documents that specify a port
 	 * number are automatically resolved to preserve links in the retrieved document.
-	 * 
+	 *
 	 * @param proxyport value to set
 	 **/
 	public void setProxyport(double proxyport) {
@@ -70,7 +85,7 @@ public final class DocumentSection extends BodyTagImpl implements AbsDoc {
 
 	/**
 	 * set the value username When required by a proxy server, a valid username.
-	 * 
+	 *
 	 * @param proxyuser value to set
 	 **/
 	public void setProxyuser(String proxyuser) {
@@ -79,7 +94,7 @@ public final class DocumentSection extends BodyTagImpl implements AbsDoc {
 
 	/**
 	 * set the value password When required by a proxy server, a valid password.
-	 * 
+	 *
 	 * @param proxypassword value to set
 	 **/
 	public void setProxypassword(String proxypassword) {
@@ -115,8 +130,14 @@ public final class DocumentSection extends BodyTagImpl implements AbsDoc {
 	}
 
 	/**
+	 * @param orientation the orientation to set @throws PageException
+	 */
+	public void setOrientation(String strOrientation) throws PageException {
+		getPDFDocument().setOrientation(strOrientation);
+	}
+
+	/**
 	 * @param src the src to set
-	 * @throws ApplicationException
 	 */
 	public void setSrc(String src) throws PageException {
 		getPDFDocument().setSrc(src);
@@ -176,7 +197,7 @@ public final class DocumentSection extends BodyTagImpl implements AbsDoc {
 	}
 
 	@Override
-	public int doStartTag() {
+	public int doStartTag() throws PageException {
 		return EVAL_BODY_BUFFERED;
 	}
 
@@ -192,14 +213,21 @@ public final class DocumentSection extends BodyTagImpl implements AbsDoc {
 	}
 
 	@Override
-	public int doEndTag() {
-		Document doc = getDocument();
-		if (doc != null) doc.addPDFDocument(getPDFDocument());
+	public int doEndTag() throws PageException {
+		if (!second) getDocument().addPDFDocument(getPDFDocument());
 		return EVAL_PAGE;
 	}
 
-	public Document getDocument() {
-		// get Mail Tag
+	public Document getDocumentEL() {
+		try {
+			return getDocument();
+		}
+		catch (PageException e) {
+			throw CFMLEngineFactory.getInstance().getExceptionUtil().createPageRuntimeException(e);
+		}
+	}
+
+	public Document getDocument() throws PageException {
 		Tag parent = getParent();
 		while (parent != null && !(parent instanceof Document)) {
 			parent = parent.getParent();
@@ -208,16 +236,20 @@ public final class DocumentSection extends BodyTagImpl implements AbsDoc {
 		if (parent instanceof Document) {
 			return (Document) parent;
 		}
-		return null;
+		throw CFMLEngineFactory.getInstance().getExceptionUtil().createApplicationException("tag documentsection must be within tag document");
 	}
 
 	/**
 	 * sets if has body or not
-	 * 
+	 *
 	 * @param hasBody
 	 */
 	public void hasBody(boolean hasBody) {
 
+	}
+
+	public int getIndex() {
+		return index;
 	}
 
 }
